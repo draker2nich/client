@@ -32,7 +32,7 @@ export async function initScene(
 
   // ---- Scene ----
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a2e);
+  scene.background = new THREE.Color(0x09090b);
 
   // ---- Camera ----
   const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
