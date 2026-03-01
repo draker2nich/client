@@ -1,63 +1,123 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import ThreeViewer from "@/components/ThreeViewer";
+import { UV_ZONES, ZONE_IDS } from "@/lib/uv/zones";
+import { generateUVMask } from "@/lib/uv/mask";
 
 export default function Home() {
+  const [activeZones, setActiveZones] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(ZONE_IDS.map((k) => [k, true]))
+  );
+  const [textureCanvas, setTextureCanvas] = useState<HTMLCanvasElement | null>(null);
+
+  // Generate texture whenever active zones change
+  useEffect(() => {
+    const canvas = generateUVMask(activeZones);
+    setTextureCanvas(canvas);
+  }, [activeZones]);
+
+  const toggleZone = useCallback((zoneId: string) => {
+    setActiveZones((prev) => ({ ...prev, [zoneId]: !prev[zoneId] }));
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setActiveZones(Object.fromEntries(ZONE_IDS.map((k) => [k, true])));
+  }, []);
+
+  const deselectAll = useCallback(() => {
+    setActiveZones(Object.fromEntries(ZONE_IDS.map((k) => [k, false])));
+  }, []);
+
+  const activeCount = Object.values(activeZones).filter(Boolean).length;
+  const activeNames = Object.entries(activeZones)
+    .filter(([, v]) => v)
+    .map(([k]) => UV_ZONES[k]?.label)
+    .join(", ");
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="flex h-screen bg-[#0f0f1a] text-gray-200">
+      {/* Sidebar — Zone Controls */}
+      <aside className="w-64 border-r border-gray-800 p-4 flex flex-col gap-3 shrink-0 overflow-y-auto">
+        <h2 className="text-base font-semibold text-white">UV Zones</h2>
+        <p className="text-xs text-gray-500">
+          {activeCount}/{ZONE_IDS.length} active
+        </p>
+
+        <div className="flex gap-2">
+          <button
+            onClick={selectAll}
+            className="flex-1 px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 transition"
+          >
+            All On
+          </button>
+          <button
+            onClick={deselectAll}
+            className="flex-1 px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 transition"
+          >
+            All Off
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          {ZONE_IDS.map((zoneId) => {
+            const zone = UV_ZONES[zoneId];
+            const isActive = activeZones[zoneId];
+            return (
+              <button
+                key={zoneId}
+                onClick={() => toggleZone(zoneId)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md border transition text-left ${
+                  isActive
+                    ? "border-green-500/50 hover:bg-green-500/10"
+                    : "border-gray-800 hover:bg-gray-800/50"
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded flex items-center justify-center text-[10px] shrink-0 ${
+                    isActive
+                      ? "bg-green-500 text-white"
+                      : "bg-gray-800 text-transparent"
+                  }`}
+                >
+                  ✓
+                </div>
+                <span
+                  className={`text-sm ${isActive ? "text-white" : "text-gray-600"}`}
+                >
+                  {zone.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Mode indicator */}
+        <div className="mt-auto p-3 bg-gray-900/50 rounded-lg border border-gray-800">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">
+            Mode
+          </p>
+          <p className="text-xs text-gray-300">
+            {activeCount === ZONE_IDS.length
+              ? "Initial generation — full design"
+              : activeCount === 0
+                ? "No zones selected"
+                : `Editing: ${activeNames}`}
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </aside>
+
+      {/* Main viewport */}
+      <main className="flex-1 flex flex-col">
+        <header className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+          <span className="text-sm text-gray-400">3D Preview</span>
+          <span className="text-xs text-gray-600">
+            Stage 1 — UV Texture Test
+          </span>
+        </header>
+
+        <div className="flex-1">
+          <ThreeViewer textureCanvas={textureCanvas} />
         </div>
       </main>
     </div>
