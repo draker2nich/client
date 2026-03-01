@@ -2,44 +2,50 @@
 
 import type { DesignVersion } from "@/types";
 
-interface VersionBarProps {
+interface Props {
   versions: DesignVersion[];
   currentVersion: number;
-  onSelectVersion: (version: number) => void;
+  onSelectVersion: (v: number) => void;
 }
 
-export default function VersionBar({
-  versions,
-  currentVersion,
-  onSelectVersion,
-}: VersionBarProps) {
+export default function VersionBar({ versions, currentVersion, onSelectVersion }: Props) {
   if (versions.length === 0) return null;
 
   return (
-    <div className="px-5 py-3 border-t border-white/[0.04]">
-      <div className="flex items-center gap-3 overflow-x-auto">
-        <span className="text-[10px] text-white/15 uppercase tracking-widest shrink-0 font-mono">
-          History
-        </span>
-        {versions.map((v) => (
-          <button
-            key={v.version}
-            onClick={() => onSelectVersion(v.version)}
-            className={`shrink-0 w-12 h-12 rounded-lg overflow-hidden transition-all duration-200 ${
-              v.version === currentVersion
-                ? "ring-1 ring-white/20 ring-offset-1 ring-offset-[#09090b]"
-                : "opacity-40 hover:opacity-70"
-            }`}
-            title={v.prompt}
-          >
-            <img
-              src={v.textureDataURL}
-              alt={`v${v.version}`}
-              className="w-full h-full object-cover"
-            />
-          </button>
-        ))}
-      </div>
+    <div style={{
+      flexShrink: 0, padding: "10px 16px",
+      background: "#0a0a0c",
+      borderTop: "1px solid rgba(255,255,255,0.05)",
+      display: "flex", alignItems: "center", gap: 12,
+      overflowX: "auto",
+    }} className="scrollbar-none">
+      <span style={{
+        fontSize: 9, color: "rgba(255,255,255,0.12)",
+        textTransform: "uppercase", letterSpacing: "0.15em",
+        fontWeight: 300, flexShrink: 0,
+      }}>
+        History
+      </span>
+      {versions.map((v) => (
+        <button
+          key={v.version}
+          onClick={() => onSelectVersion(v.version)}
+          style={{
+            width: 40, height: 40, borderRadius: 8, overflow: "hidden",
+            flexShrink: 0, cursor: "pointer", padding: 0,
+            border: v.version === currentVersion
+              ? "1px solid rgba(255,255,255,0.2)"
+              : "1px solid rgba(255,255,255,0.05)",
+            opacity: v.version === currentVersion ? 1 : 0.4,
+            transition: "all 0.2s",
+            background: "none",
+          }}
+          title={v.prompt}
+        >
+          <img src={v.textureDataURL} alt={`v${v.version}`}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        </button>
+      ))}
     </div>
   );
 }

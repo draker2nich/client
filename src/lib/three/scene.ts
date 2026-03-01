@@ -15,14 +15,6 @@ export interface SceneContext {
 
 const MODEL_PATH = "/models/tshirt.glb";
 
-/**
- * Initialize the full Three.js scene: renderer, camera, lights,
- * orbit controls, and load the t-shirt GLB model.
- *
- * @param container - DOM element to mount the renderer into
- * @param onModelLoaded - Callback when model is ready
- * @returns SceneContext with all references for external control
- */
 export async function initScene(
   container: HTMLElement,
   onModelLoaded?: () => void
@@ -32,40 +24,64 @@ export async function initScene(
 
   // ---- Scene ----
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x09090b);
+  scene.background = new THREE.Color(0x08080a);
 
   // ---- Camera ----
-  const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
-  camera.position.set(0, 0.5, 3);
+  // near = 0.001 prevents clipping when orbiting close to the model
+  // far = 1000 ensures nothing disappears at distance
+  const camera = new THREE.PerspectiveCamera(40, w / h, 0.001, 1000);
+  camera.position.set(0, 0.3, 4);
 
   // ---- Renderer ----
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: false,
+    logarithmicDepthBuffer: true, // prevents z-fighting at close range
+  });
   renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  renderer.toneMappingExposure = 1.1;
   container.appendChild(renderer.domElement);
 
-  // ---- Lights ----
-  const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+  // ---- Lighting — soft studio setup ----
+  const ambient = new THREE.AmbientLight(0xffffff, 0.5);
   scene.add(ambient);
 
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(3, 4, 5);
-  scene.add(dirLight);
+  // Key light — front-right-top, warm
+  const keyLight = new THREE.DirectionalLight(0xfff5ee, 1.0);
+  keyLight.position.set(5, 6, 5);
+  scene.add(keyLight);
 
-  const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
-  backLight.position.set(-3, 2, -3);
-  scene.add(backLight);
+  // Fill light — left side, cooler
+  const fillLight = new THREE.DirectionalLight(0xeef0ff, 0.5);
+  fillLight.position.set(-5, 3, 3);
+  scene.add(fillLight);
+
+  // Rim light — behind, for edge definition
+  const rimLight = new THREE.DirectionalLight(0xffffff, 0.35);
+  rimLight.position.set(0, 3, -6);
+  scene.add(rimLight);
+
+  // Bottom fill — prevents underside going black
+  const bottomFill = new THREE.DirectionalLight(0xffffff, 0.2);
+  bottomFill.position.set(0, -4, 2);
+  scene.add(bottomFill);
+
+  // Hemisphere light — subtle sky/ground gradient
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.15);
+  scene.add(hemi);
 
   // ---- Orbit Controls ----
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
+  controls.dampingFactor = 0.06;
   controls.enablePan = false;
-  controls.minDistance = 1.5;
-  controls.maxDistance = 6;
+  controls.minDistance = 0.5;  // allow close zoom without clipping
+  controls.maxDistance = 15;
+  controls.maxPolarAngle = Math.PI;
+  controls.minPolarAngle = 0;
   controls.target.set(0, 0, 0);
 
   // ---- Context ----
@@ -85,23 +101,53 @@ export async function initScene(
   const gltf = await loader.loadAsync(MODEL_PATH);
   const model = gltf.scene;
 
-  // Center and scale model
+  // Center and scale
   const box = new THREE.Box3().setFromObject(model);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
-  const scale = 2.0 / maxDim;
+  const scale = 2.5 / maxDim;
   model.scale.setScalar(scale);
-  model.position.sub(center.multiplyScalar(scale));
+
+  // Recompute bounding box after scaling
+  const scaledBox = new THREE.Box3().setFromObject(model);
+  const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
+
+  // Move model so its center is at origin
+  model.position.sub(scaledCenter);
 
   scene.add(model);
   ctx.model = model;
 
-  // ---- UV Texture update function ----
-  ctx.updateTexture = (canvas: HTMLCanvasElement) => {
-    if (ctx.uvTexture) {
-      ctx.uvTexture.dispose();
+  // Fix all meshes on initial load — DoubleSide + frustumCulled off
+  model.traverse((child) => {
+    if ((child as THREE.Mesh).isMesh) {
+      const mesh = child as THREE.Mesh;
+      if (mesh.geometry) {
+        mesh.geometry.computeVertexNormals();
+      }
+      mesh.frustumCulled = false;
+      if (mesh.material instanceof THREE.MeshStandardMaterial) {
+        mesh.material.side = THREE.DoubleSide;
+        mesh.material.shadowSide = THREE.DoubleSide;
+      } else if (Array.isArray(mesh.material)) {
+        mesh.material.forEach((m) => {
+          if (m instanceof THREE.MeshStandardMaterial) {
+            m.side = THREE.DoubleSide;
+            m.shadowSide = THREE.DoubleSide;
+          }
+        });
+      }
     }
+  });
+
+  // Aim controls at origin (model center)
+  controls.target.set(0, 0, 0);
+  controls.update();
+
+  // ---- Texture update ----
+  ctx.updateTexture = (canvas: HTMLCanvasElement) => {
+    if (ctx.uvTexture) ctx.uvTexture.dispose();
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.flipY = false;
@@ -111,25 +157,31 @@ export async function initScene(
     model.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-        if (mesh.material instanceof THREE.MeshStandardMaterial) {
-          mesh.material.map = tex;
-          mesh.material.needsUpdate = true;
-        } else {
-          // Replace with standard material for UV support
-          mesh.material = new THREE.MeshStandardMaterial({
-            map: tex,
-            side: THREE.DoubleSide,
-            roughness: 0.7,
-            metalness: 0.0,
-          });
+
+        // Recompute normals to fix invisible faces
+        if (mesh.geometry) {
+          mesh.geometry.computeVertexNormals();
         }
+
+        // Ensure both sides are rendered — fixes holes from flipped normals
+        const mat = new THREE.MeshStandardMaterial({
+          map: tex,
+          side: THREE.DoubleSide,
+          roughness: 0.75,
+          metalness: 0.0,
+          shadowSide: THREE.DoubleSide,
+        });
+
+        // Disable frustum culling so no parts disappear at edges
+        mesh.frustumCulled = false;
+        mesh.material = mat;
       }
     });
   };
 
   onModelLoaded?.();
 
-  // ---- Animation Loop ----
+  // ---- Animation loop ----
   let animId: number;
   const animate = () => {
     animId = requestAnimationFrame(animate);
@@ -138,7 +190,7 @@ export async function initScene(
   };
   animate();
 
-  // ---- Resize handler ----
+  // ---- Resize ----
   const onResize = () => {
     const nw = container.clientWidth;
     const nh = container.clientHeight;
