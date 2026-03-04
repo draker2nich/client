@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Make server-side env vars available to API routes
+  serverExternalPackages: ["@google/genai"],
 };
 
 export default nextConfig;
