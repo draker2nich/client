@@ -16,9 +16,10 @@ interface Props {
   isGenerating: boolean;
   onSendMessage: (t: string) => void;
   onRegenerate: () => void;
+  onDownload: () => void;
 }
 
-export default function Chat({ messages, isGenerating, onSendMessage, onRegenerate }: Props) {
+export default function Chat({ messages, isGenerating, onSendMessage, onRegenerate, onDownload }: Props) {
   const [input, setInput] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -169,7 +170,7 @@ export default function Chat({ messages, isGenerating, onSendMessage, onRegenera
                 {[
                   { icon: "↻", label: "Ещё вариант", action: () => onRegenerate() },
                   { icon: "◐", label: "Изменить", action: () => onSendMessage("Измени цветовую гамму") },
-                  { icon: "↓", label: "Скачать", action: () => {} },
+                  { icon: "↓", label: "Скачать", action: () => onDownload() },
                 ].map((btn) => (
                   <button
                     key={btn.label}

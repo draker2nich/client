@@ -15,6 +15,37 @@ export interface SceneContext {
 
 const MODEL_PATH = "/models/tshirt.glb";
 
+/**
+ * Apply a MeshStandardMaterial with DoubleSide to every mesh in the model.
+ * When a CanvasTexture is provided it is used as the `map`;
+ * otherwise a plain white material is applied so nothing looks transparent.
+ */
+function applyMaterialToModel(
+  model: THREE.Group,
+  texture: THREE.CanvasTexture | null
+): void {
+  model.traverse((child) => {
+    if (!(child as THREE.Mesh).isMesh) return;
+    const mesh = child as THREE.Mesh;
+
+    if (mesh.geometry) {
+      mesh.geometry.computeVertexNormals();
+    }
+    mesh.frustumCulled = false;
+
+    const mat = new THREE.MeshStandardMaterial({
+      map: texture ?? undefined,
+      color: texture ? undefined : 0xffffff,
+      side: THREE.DoubleSide,
+      roughness: 0.75,
+      metalness: 0.0,
+      shadowSide: THREE.DoubleSide,
+    });
+
+    mesh.material = mat;
+  });
+}
+
 export async function initScene(
   container: HTMLElement,
   onModelLoaded?: () => void
@@ -27,8 +58,6 @@ export async function initScene(
   scene.background = new THREE.Color(0x08080a);
 
   // ---- Camera ----
-  // near = 0.001 prevents clipping when orbiting close to the model
-  // far = 1000 ensures nothing disappears at distance
   const camera = new THREE.PerspectiveCamera(40, w / h, 0.001, 1000);
   camera.position.set(0, 0.3, 4);
 
@@ -36,7 +65,7 @@ export async function initScene(
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
     alpha: false,
-    logarithmicDepthBuffer: true, // prevents z-fighting at close range
+    logarithmicDepthBuffer: true,
   });
   renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -49,27 +78,22 @@ export async function initScene(
   const ambient = new THREE.AmbientLight(0xffffff, 0.5);
   scene.add(ambient);
 
-  // Key light — front-right-top, warm
   const keyLight = new THREE.DirectionalLight(0xfff5ee, 1.0);
   keyLight.position.set(5, 6, 5);
   scene.add(keyLight);
 
-  // Fill light — left side, cooler
   const fillLight = new THREE.DirectionalLight(0xeef0ff, 0.5);
   fillLight.position.set(-5, 3, 3);
   scene.add(fillLight);
 
-  // Rim light — behind, for edge definition
   const rimLight = new THREE.DirectionalLight(0xffffff, 0.35);
   rimLight.position.set(0, 3, -6);
   scene.add(rimLight);
 
-  // Bottom fill — prevents underside going black
   const bottomFill = new THREE.DirectionalLight(0xffffff, 0.2);
   bottomFill.position.set(0, -4, 2);
   scene.add(bottomFill);
 
-  // Hemisphere light — subtle sky/ground gradient
   const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.15);
   scene.add(hemi);
 
@@ -78,7 +102,7 @@ export async function initScene(
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
   controls.enablePan = false;
-  controls.minDistance = 0.5;  // allow close zoom without clipping
+  controls.minDistance = 0.5;
   controls.maxDistance = 15;
   controls.maxPolarAngle = Math.PI;
   controls.minPolarAngle = 0;
@@ -103,45 +127,21 @@ export async function initScene(
 
   // Center and scale
   const box = new THREE.Box3().setFromObject(model);
-  const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
   const scale = 2.5 / maxDim;
   model.scale.setScalar(scale);
 
-  // Recompute bounding box after scaling
   const scaledBox = new THREE.Box3().setFromObject(model);
   const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
-
-  // Move model so its center is at origin
   model.position.sub(scaledCenter);
 
   scene.add(model);
   ctx.model = model;
 
-  // Fix all meshes on initial load — DoubleSide + frustumCulled off
-  model.traverse((child) => {
-    if ((child as THREE.Mesh).isMesh) {
-      const mesh = child as THREE.Mesh;
-      if (mesh.geometry) {
-        mesh.geometry.computeVertexNormals();
-      }
-      mesh.frustumCulled = false;
-      if (mesh.material instanceof THREE.MeshStandardMaterial) {
-        mesh.material.side = THREE.DoubleSide;
-        mesh.material.shadowSide = THREE.DoubleSide;
-      } else if (Array.isArray(mesh.material)) {
-        mesh.material.forEach((m) => {
-          if (m instanceof THREE.MeshStandardMaterial) {
-            m.side = THREE.DoubleSide;
-            m.shadowSide = THREE.DoubleSide;
-          }
-        });
-      }
-    }
-  });
+  // Apply a solid white DoubleSide material immediately so nothing is transparent
+  applyMaterialToModel(model, null);
 
-  // Aim controls at origin (model center)
   controls.target.set(0, 0, 0);
   controls.update();
 
@@ -154,29 +154,7 @@ export async function initScene(
     tex.colorSpace = THREE.SRGBColorSpace;
     ctx.uvTexture = tex;
 
-    model.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        const mesh = child as THREE.Mesh;
-
-        // Recompute normals to fix invisible faces
-        if (mesh.geometry) {
-          mesh.geometry.computeVertexNormals();
-        }
-
-        // Ensure both sides are rendered — fixes holes from flipped normals
-        const mat = new THREE.MeshStandardMaterial({
-          map: tex,
-          side: THREE.DoubleSide,
-          roughness: 0.75,
-          metalness: 0.0,
-          shadowSide: THREE.DoubleSide,
-        });
-
-        // Disable frustum culling so no parts disappear at edges
-        mesh.frustumCulled = false;
-        mesh.material = mat;
-      }
-    });
+    applyMaterialToModel(model, tex);
   };
 
   onModelLoaded?.();

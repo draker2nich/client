@@ -78,7 +78,6 @@ export default function Home() {
   });
   const [textureCanvas, setTextureCanvas] = useState<HTMLCanvasElement | null>(null);
 
-  // Keep track of the last enhanced prompt for regeneration
   const lastEnhancedPromptRef = useRef<string>("");
 
   // Initialize with default UV mask
@@ -102,7 +101,6 @@ export default function Home() {
       }));
 
       try {
-        // Build UV mask — full mask for initial generation
         const uvMask = generateFullMask();
         if (!uvMask) throw new Error("Failed to generate UV mask");
 
@@ -172,6 +170,18 @@ export default function Home() {
     }
   }, [chatState.messages, handleSendMessage]);
 
+  const handleDownload = useCallback(() => {
+    if (!textureCanvas) return;
+
+    const dataURL = textureCanvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = `design-v${chatState.currentVersion || 1}.png`;
+    link.href = dataURL;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [textureCanvas, chatState.currentVersion]);
+
   const handleSelectVersion = useCallback(
     (version: number) => {
       const v = chatState.versions.find((x) => x.version === version);
@@ -217,6 +227,7 @@ export default function Home() {
           isGenerating={chatState.isGenerating}
           onSendMessage={handleSendMessage}
           onRegenerate={handleRegenerate}
+          onDownload={handleDownload}
         />
       </div>
 

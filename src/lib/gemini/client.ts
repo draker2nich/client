@@ -56,12 +56,23 @@ export async function enhancePrompt(userPrompt: string): Promise<string> {
 }
 
 // --- Image Generation ---
-const DESIGN_SYSTEM_PROMPT = `You are generating a seamless textile design for a T-shirt UV map.
-The provided image is a UV layout where WHITE areas are the fabric zones (front, back, sleeves, neck) 
-and BLACK areas are non-fabric background that must remain BLACK.
-Generate the design ONLY on the white fabric zones. Do NOT paint over the black background areas.
-The design should be continuous and visually coherent across all white zones.
-Ensure the design looks professional and print-ready.`;
+const DESIGN_SYSTEM_PROMPT = `You are a professional textile print designer. You are editing a T-shirt UV texture map image.
+
+CRITICAL RULES — follow these exactly:
+
+1. MASK LOGIC: The provided image is a flat UV unwrap of a T-shirt. It contains two types of areas:
+   - WHITE zones = fabric panels (front torso, back torso, left sleeve, right sleeve, neck). These are the ONLY areas you may paint on.
+   - BLACK zones = empty background outside the fabric panels. These areas MUST stay pure black (#000000). Do NOT place any design, color, gradient, or texture on the black areas.
+
+2. PRESERVE SHAPE: Do not alter, shift, or distort the boundaries between white and black zones. The silhouette of each fabric panel must remain exactly as provided.
+
+3. DESIGN PLACEMENT: Fill every white fabric zone with the requested design. The design should be continuous, visually coherent, and look natural when the UV map is wrapped onto a 3D T-shirt model. Think about how front, back, sleeves, and neck connect on a real garment.
+
+4. PRINT QUALITY: The output must look like a professional, print-ready textile pattern — crisp details, vibrant colors, no artifacts, no watermarks, no text unless explicitly requested.
+
+5. OUTPUT FORMAT: Return a single square image at the same resolution as the input. The image must be a valid UV texture map that can be directly applied to a 3D model.
+
+6. ABSOLUTE CONSTRAINT: If any part of the black background gets colored or altered, the output is INVALID. The black areas act as a hard mask — treat them as untouchable.`;
 
 export interface GenerateDesignOptions {
   enhancedPrompt: string;
@@ -79,20 +90,6 @@ export async function generateDesign(
   const client = getClient();
   const { enhancedPrompt, uvMaskBase64 } = options;
 
-  // Convert base64 to Buffer for File API upload
-  const buffer = Buffer.from(uvMaskBase64, "base64");
-
-  // Upload UV mask via File API (handles large files properly)
-  const uploadedFile = await client.files.upload({
-    file: new Blob([buffer], { type: "image/png" }),
-    config: { mimeType: "image/png" },
-  });
-
-  if (!uploadedFile.uri || !uploadedFile.mimeType) {
-    throw new Error("File upload failed — no URI returned");
-  }
-
-  // Generate design using the uploaded file reference
   const response = await client.models.generateContent({
     model: IMAGE_MODEL,
     contents: [
@@ -103,9 +100,9 @@ export async function generateDesign(
             text: `${DESIGN_SYSTEM_PROMPT}\n\nDesign request: ${enhancedPrompt}`,
           },
           {
-            fileData: {
-              fileUri: uploadedFile.uri,
-              mimeType: uploadedFile.mimeType,
+            inlineData: {
+              mimeType: "image/png",
+              data: uvMaskBase64,
             },
           },
         ],

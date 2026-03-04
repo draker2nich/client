@@ -25,8 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ru" className={`${raleway.variable} ${playfair.variable}`}>
-      <body className="font-[var(--font-body)] antialiased bg-[#09090b] text-white">
+    <html lang="ru" className={`${raleway.variable} ${playfair.variable}`} suppressHydrationWarning>
+      <body className="font-[var(--font-body)] antialiased bg-[#09090b] text-white" suppressHydrationWarning>
         {children}
       </body>
     </html>
