@@ -16,9 +16,8 @@ export interface SceneContext {
 const MODEL_PATH = "/models/tshirt.glb";
 
 /**
- * Apply a MeshStandardMaterial with DoubleSide to every mesh in the model.
- * When a CanvasTexture is provided it is used as the `map`;
- * otherwise a plain white material is applied so nothing looks transparent.
+ * Apply texture ONLY to the outer layer mesh (Image_3).
+ * Inner layer (Image_0) gets a plain material without the design texture.
  */
 function applyMaterialToModel(
   model: THREE.Group,
@@ -33,16 +32,40 @@ function applyMaterialToModel(
     }
     mesh.frustumCulled = false;
 
-    const mat = new THREE.MeshStandardMaterial({
-      map: texture ?? undefined,
-      color: texture ? undefined : 0xffffff,
-      side: THREE.DoubleSide,
-      roughness: 0.75,
-      metalness: 0.0,
-      shadowSide: THREE.DoubleSide,
-    });
+    // Identify layer by material name
+    const currentMat = mesh.material as THREE.MeshStandardMaterial;
+    const matName = currentMat?.name || "";
+    const isOuter = matName === "MainFabric_Outer";
+    const isInner = matName === "MainFabric_Inner";
 
-    mesh.material = mat;
+    if (isOuter && texture) {
+      // Outer layer — apply the design texture
+      mesh.material = new THREE.MeshStandardMaterial({
+        name: "MainFabric_Outer",
+        map: texture,
+        side: THREE.FrontSide,
+        roughness: 0.75,
+        metalness: 0.0,
+      });
+    } else if (isInner) {
+      // Inner layer — always plain white, no design
+      mesh.material = new THREE.MeshStandardMaterial({
+        name: "MainFabric_Inner",
+        color: 0xffffff,
+        side: THREE.FrontSide,
+        roughness: 0.75,
+        metalness: 0.0,
+      });
+    } else {
+      // Any other mesh or outer without texture yet
+      mesh.material = new THREE.MeshStandardMaterial({
+        name: matName,
+        color: 0xffffff,
+        side: THREE.FrontSide,
+        roughness: 0.75,
+        metalness: 0.0,
+      });
+    }
   });
 }
 
@@ -53,15 +76,12 @@ export async function initScene(
   const w = container.clientWidth;
   const h = container.clientHeight;
 
-  // ---- Scene ----
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x08080a);
 
-  // ---- Camera ----
   const camera = new THREE.PerspectiveCamera(40, w / h, 0.001, 1000);
   camera.position.set(0, 0.3, 4);
 
-  // ---- Renderer ----
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
     alpha: false,
@@ -74,7 +94,7 @@ export async function initScene(
   renderer.toneMappingExposure = 1.1;
   container.appendChild(renderer.domElement);
 
-  // ---- Lighting — soft studio setup ----
+  // Lighting — soft studio setup
   const ambient = new THREE.AmbientLight(0xffffff, 0.5);
   scene.add(ambient);
 
@@ -97,7 +117,7 @@ export async function initScene(
   const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.15);
   scene.add(hemi);
 
-  // ---- Orbit Controls ----
+  // Orbit Controls
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
@@ -108,7 +128,6 @@ export async function initScene(
   controls.minPolarAngle = 0;
   controls.target.set(0, 0, 0);
 
-  // ---- Context ----
   const ctx: SceneContext = {
     scene,
     camera,
@@ -120,7 +139,7 @@ export async function initScene(
     updateTexture: () => {},
   };
 
-  // ---- Load GLB Model ----
+  // Load GLB Model
   const loader = new GLTFLoader();
   const gltf = await loader.loadAsync(MODEL_PATH);
   const model = gltf.scene;
@@ -139,13 +158,13 @@ export async function initScene(
   scene.add(model);
   ctx.model = model;
 
-  // Apply a solid white DoubleSide material immediately so nothing is transparent
+  // Default: plain white material on all meshes, no texture
   applyMaterialToModel(model, null);
 
   controls.target.set(0, 0, 0);
   controls.update();
 
-  // ---- Texture update ----
+  // Texture update — only targets Image_3 (outer layer)
   ctx.updateTexture = (canvas: HTMLCanvasElement) => {
     if (ctx.uvTexture) ctx.uvTexture.dispose();
 
@@ -159,7 +178,7 @@ export async function initScene(
 
   onModelLoaded?.();
 
-  // ---- Animation loop ----
+  // Animation loop
   let animId: number;
   const animate = () => {
     animId = requestAnimationFrame(animate);
@@ -168,7 +187,7 @@ export async function initScene(
   };
   animate();
 
-  // ---- Resize ----
+  // Resize
   const onResize = () => {
     const nw = container.clientWidth;
     const nh = container.clientHeight;
@@ -178,7 +197,7 @@ export async function initScene(
   };
   window.addEventListener("resize", onResize);
 
-  // ---- Dispose ----
+  // Dispose
   ctx.dispose = () => {
     window.removeEventListener("resize", onResize);
     cancelAnimationFrame(animId);

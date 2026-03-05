@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import ThreeViewer from "@/components/ThreeViewer";
 import Chat from "@/components/Chat";
 import VersionBar from "@/components/VersionBar";
@@ -76,14 +76,11 @@ export default function Home() {
     currentVersion: 0,
     isGenerating: false,
   });
+
+  // Start with null — no texture applied, model shows default white
   const [textureCanvas, setTextureCanvas] = useState<HTMLCanvasElement | null>(null);
 
   const lastEnhancedPromptRef = useRef<string>("");
-
-  // Initialize with default UV mask
-  useEffect(() => {
-    setTextureCanvas(generateFullMask());
-  }, []);
 
   const handleSendMessage = useCallback(
     async (text: string) => {
