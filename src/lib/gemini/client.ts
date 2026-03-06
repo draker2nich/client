@@ -112,7 +112,7 @@ export async function generateDesign(
       responseModalities: ["IMAGE"],
       imageConfig: {
         aspectRatio: "1:1",
-        imageSize: "2K",
+        imageSize: "1K",
       },
     },
   });
